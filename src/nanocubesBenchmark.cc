@@ -312,12 +312,12 @@ std::vector<std::string> getQueries(std::string filePath)
 	return queries;
 }
 
-void report(std::string s, std::ofstream* fileStream)
+void report(std::string s, std::ofstream& fileStream, bool writeToLogFile)
 {
 	std::cout << s;
 
-	if(fileStream)
-		*fileStream << s;
+	if(writeToLogFile)
+		fileStream << s;
 }
 
 using boost::asio::ip::tcp;
@@ -374,7 +374,7 @@ bool runQuereys(Options& options, std::vector<std::string> queries, std::ofstrea
 				querysFailed++;
 			}*/
 			if (status_code != 200)
-				report("(HTTP) Response returned with status code " + std::to_string(status_code) + " on query: " + query + "\n", &fileStream);
+				report("(HTTP) Response returned with status code " + std::to_string(status_code) + " on query: " + query + "\n", fileStream, true);
 			else
 				querySucceeded++;
 
@@ -402,13 +402,13 @@ bool runQuereys(Options& options, std::vector<std::string> queries, std::ofstrea
 				throw boost::system::system_error(error);*/
 		}
 
-		report(std::to_string(querySucceeded) + "/" + std::to_string(queries.size()) + " queries succeeded\n", &fileStream);
+		report(std::to_string(querySucceeded) + "/" + std::to_string(queries.size()) + " queries succeeded\n", fileStream, true);
 
 		return true;
 	}
 	catch (std::exception& e)
 	{
-		report("Exception: " + std::string(e.what()) + "\n", &fileStream);
+		report("Exception: " + std::string(e.what()) + "\n", fileStream, true);
 		return false;
 	}
 }
@@ -489,7 +489,7 @@ int main(int argc, char *args[])
 
 		std::string commandLine = "\"" + options.nanocubeFilePath.getValue() + "\"" + arguments + "\n\n";
 
-		report(commandLine, &logFileStream);
+		report(commandLine, logFileStream, true);
 
 		//start timer
 		stopwatch::Stopwatch sw;
@@ -502,7 +502,7 @@ int main(int argc, char *args[])
 
 			finishedInsert = s.find("(stdin:done)") != std::string::npos;
 
-			report(s, finishedInsert ? &logFileStream : nullptr);
+			report(s, logFileStream, finishedInsert);
 		});
 
 		//TODO: Set Priority on Linux and Mac too
@@ -514,20 +514,20 @@ int main(int argc, char *args[])
 		while (!finishedInsert)
 			std::this_thread::sleep_for(std::chrono::seconds(1));
 
-		report("\ntestrun build #" + std::to_string(i) + "\ntime: " + std::to_string(sw.time()) + "ms\n\n", &logFileStream);
+		report("\ntestrun build #" + std::to_string(i) + "\ntime: " + std::to_string(sw.time()) + "ms\n\n", logFileStream, true);
 
 		sw.stop();
 
-		report("Start querying...\n", &logFileStream);
+		report("Start querying...\n", logFileStream, true);
 		//start timer
 		stopwatch::Stopwatch sw2;
 		sw2.start();
 
 		//start querey benchmark
 		if (!runQuereys(options, queries, logFileStream))
-			report("queries failed!\n", &logFileStream);
+			report("queries failed!\n", logFileStream, true);
 		else
-			report("finished after " + std::to_string(sw2.time()) + " ms\n", &logFileStream);
+			report("finished after " + std::to_string(sw2.time()) + " ms\n\n\n", logFileStream, true);
 
 		sw2.stop();
 
