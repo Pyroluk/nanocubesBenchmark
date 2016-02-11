@@ -30,3 +30,10 @@ The test results are written to stdout and additionally logged into testlog.txt 
 -g (Windows only) Size of the temporary memory mapping file in gigabytes. Default is 32GB.
 
 -w (Windows only) folder path for the temporary memory files. Default is windows temp folder.
+
+example:
+
+-u PeterTestData.harp -p auto6 -d NanoCubePeterTestData.dmp -m 100000 -f 1
+
+Will use queries from PeterTestData.harp, build cubes with up to 6 parts and auto generate partition functions.
+Reads in 100000 records/points from NanoCubePeterTestData.dmp and report the status every second.
