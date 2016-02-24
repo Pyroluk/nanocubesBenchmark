@@ -13,7 +13,7 @@ find_package(Threads REQUIRED)
 #
 # Boost
 #
-find_package(Boost 1.48 REQUIRED)
+find_package(Boost 1.48 REQUIRED system)
 include_directories(${Boost_INCLUDE_DIRS})
 message("---- Boost ----")
 message("Boost_INCLUDE_DIR: ${Boost_INCLUDE_DIRS}")
