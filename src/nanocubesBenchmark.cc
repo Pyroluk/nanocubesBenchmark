@@ -176,7 +176,7 @@ struct Options {
 		"File path" // type description
 	};
 
-#ifdef _WIN64
+#ifdef _WIN32
 	TCLAP::ValueArg<std::string> temp_path{
 		"w",                      // flag
 		"temp_path",              // name
@@ -193,7 +193,7 @@ struct Options {
 		32,                   // value
 		"size in GB" // type description
 	};
-#endif // _WIN64
+#endif // _WIN32
 };
 
 Options::Options(std::vector<std::string>& args)
@@ -215,7 +215,7 @@ Options::Options(std::vector<std::string>& args)
 	cmd_line.add(compression);
 	cmd_line.add(nanocubeFilePath);
 	cmd_line.add(queriesFilePath);
-#ifdef _WIN64
+#ifdef _WIN32
 	cmd_line.add(temp_path);
 	cmd_line.add(max_nanocube_size);
 #endif
@@ -266,7 +266,7 @@ static inline std::string &trim(std::string &s) {
 	return ltrim(rtrim(s));
 }
 
-#ifdef _WIN64
+#ifdef _WIN32
 #pragma warning(disable : 4996)
 #endif
 std::string urlDecode(std::string str) {
@@ -591,8 +591,10 @@ int main(int argc, char *args[])
 		arguments += " -b " + std::to_string(options.batch_size.getValue());
 		arguments += " -x " + std::to_string(options.training_size.getValue());
 		arguments += " -c " + options.compression.getValue();
+#ifdef _WIN32
 		if (options.temp_path.isSet())
 			arguments += " -w " + options.temp_path.getValue();
+#endif
 		arguments += " -g " + std::to_string(options.max_nanocube_size.getValue());
 		arguments += " -p " + (useAutoPartFunc ? "auto" + std::to_string(i) : std::to_string(i));
 
