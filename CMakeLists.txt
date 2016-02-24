@@ -20,7 +20,7 @@ message("Boost_INCLUDE_DIR: ${Boost_INCLUDE_DIRS}")
 message("Boost_LIBRARIES:     ${Boost_LIBRARIES}")
 
 
-include_directories(thirdparty/tclap)
+include_directories(thirdparty)
 
 
 if(APPLE)
