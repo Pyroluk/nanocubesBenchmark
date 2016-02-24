@@ -2,11 +2,13 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <unordered_map>
 #include <boost/asio.hpp>
 
 #include "stopwatch.hh"
 #include "tclap/CmdLine.h"
 #include "tiny-process-library/process.hpp"
+#include "jsoncpp/json.h"
 
 struct Options {
 
@@ -289,43 +291,46 @@ std::string urlDecode(std::string str) {
 	return ret;
 }
 
-std::vector<std::string> getQueries(std::string filePath)
+std::map<std::string, std::string> getQueries(std::string filePath)
 {
 	std::ifstream fileStream(filePath);
-	std::vector<std::string> queries;
+	//query, result
+	std::map<std::string, std::string> queries;
 
-	std::string line;
-	while (std::getline(fileStream, line))
-		if (endsWith(filePath, ".harp") || endsWith(filePath, ".har"))//firebug network export files,  net.logLimit = 0 -> no limit
+	if (endsWith(filePath, ".json"))//firebug network export files,  net.logLimit = 0 -> no limit
+	{
+		Json::Value root;
+		fileStream >> root;
+
+		const Json::Value entries = root["log"]["entries"];
+		for (int index = 0; index < entries.size(); ++index)  // Iterates over the sequence elements.
 		{
-			auto tmp = trim(line);
-			if (startsWith(tmp, "\"url\":") && !endsWith(tmp, ".png\","))
-			{
-				tmp = tmp.substr(tmp.find_last_of('/') + 1);//"url": "http://lukas-pc.fritz.box:29512/count.r(%22time%22,mt_interval_sequence(0,65,8192))",
-				tmp = urlDecode(tmp.substr(0, tmp.length() - 2));//count.r(%22time%22,mt_interval_sequence(0,65,8192))",
-				queries.push_back(tmp);//count.r(%22time%22,mt_interval_sequence(0,65,8192))
-			}
+			std::string query = entries[index]["request"]["url"].asString();
+			if (!endsWith(query, ".png"))
+				queries.insert({ urlDecode(query.substr(query.find_last_of('/') + 1)), "" });//entries[index]["response"]["content"]["text"].asString()});//count.r("time",mt_interval_sequence(0,65,8192))
 		}
-		else
-			queries.push_back(line); //count.r(% 22time % 22, mt_interval_sequence(0, 65, 8192))
+	}
+	else
+		for (std::string line; std::getline(fileStream, line);)
+			queries.insert({ line, "" }); //count.r("time", mt_interval_sequence(0, 65, 8192))
 
 	return queries;
 }
 
-void report(std::string s, std::ofstream& fileStream, bool writeToLogFile)
+void report(std::string s, std::ofstream& fileStream, bool writeToLogFile = true)
 {
 	std::cout << s;
 
-	if(writeToLogFile)
+	if (writeToLogFile)
 		fileStream << s;
 }
 
 using boost::asio::ip::tcp;
-bool runQuereys(Options& options, std::vector<std::string> queries, std::ofstream& fileStream)
+bool runQuereys(Options& options, std::map<std::string, std::string>& queries, std::ofstream& fileStream)
 {
 	try
 	{
-		auto querySucceeded = 0;
+		auto queriesSucceeded = 0;
 
 		boost::asio::io_service io_service;
 
@@ -343,13 +348,17 @@ bool runQuereys(Options& options, std::vector<std::string> queries, std::ofstrea
 		// allow us to treat all data up until the EOF as the content.
 		for (auto& query : queries)
 		{
+			bool currentQuerySucceeded = false;
+
 			//socket.set_option(tcp::no_delay(true));//disable Nagle algorithm
 			boost::asio::streambuf request;
 			std::ostream request_stream(&request);
-			request_stream << "GET /" << query << " HTTP/1.1\r\n";
+			request_stream << "GET /" << query.first << " HTTP/1.1\r\n";
 			request_stream << "Host: " << "localhost:" << options.query_port.getValue() << "\r\n";
 			request_stream << "Accept: */*\r\n";
 			request_stream << "\r\n\r\n";
+
+			report(query.first + "\n", fileStream);
 
 			// Send the request.
 			boost::asio::write(socket, request);
@@ -374,41 +383,140 @@ bool runQuereys(Options& options, std::vector<std::string> queries, std::ofstrea
 				querysFailed++;
 			}*/
 			if (status_code != 200)
-				report("(HTTP) Response returned with status code " + std::to_string(status_code) + " on query: " + query + "\n", fileStream, true);
+				report("(HTTP) Response returned with status code " + std::to_string(status_code) + " on query: " + query.first + "\n", fileStream, true);
 			else
-				querySucceeded++;
+				currentQuerySucceeded = true;
 
 			// Read the response headers, which are terminated by a blank line.
-			/*boost::asio::read_until(socket, response, "\r\n\r\n");
+			boost::asio::read_until(socket, response, "\r\n\r\n");
 
-			/* Process the response headers.
+			// Process the response headers.
 			std::string header;
 			std::size_t contentLength = 0;
 			while (std::getline(response_stream, header) && header != "\r")
 				if (startsWith(header, "Content-Length: "))//"Content-Length: 75\r"
 					contentLength = std::stoi(header.substr(16));
 
-			//optional TODO: Check if response corresponds to the on inside the harp/har file
+			// Write whatever content we already have to output.			
+			std::stringstream ssResponse;
+			ssResponse << &response;
 
-			/* Write whatever content we already have to output.
-			if (response.size() > 0)
-				std::cout << &response;*/
-
-			/* Read until EOF, writing data to output as we go.
+			// Read rest
 			boost::system::error_code error;
-			while (boost::asio::read(socket, response, boost::asio::transfer_at_least(1), error))
-				;//std::cout << &response;
-			if (error != boost::asio::error::eof)
-				throw boost::system::system_error(error);*/
+			while (contentLength - ssResponse.str().length() && boost::asio::read(socket, response, boost::asio::transfer_at_least(contentLength - ssResponse.str().length()), error))
+				ssResponse << &response;
+
+			//optional: Check if response corresponds to the on located inside the harp/har file
+			if (query.second != "")
+			{
+				if (query.second != ssResponse.str())//direct compare
+				{
+					//compare in detail, order of paths can vary
+
+					//parse JSON
+					Json::Value rootResponse;
+					ssResponse >> rootResponse;
+
+					Json::Value rootExpected;
+					Json::Reader reader;
+					bool parsingSuccessful = reader.parse(query.second, rootExpected);
+					if (parsingSuccessful)
+					{
+						//check if equal
+						if (rootResponse["layers"][0].asString() == rootExpected["layers"][0].asString())
+						{
+							//{ "layers":[], "root" : { "val":43402 } }
+
+							if (rootExpected["root"]["val"].isNull() || rootResponse["root"]["val"].isNull())//root has no value
+							{
+								const Json::Value childrenResponse = rootResponse["root"]["children"];
+								const Json::Value childrenExpected = rootExpected["root"]["children"];
+
+								if (childrenExpected.isNull() && !childrenResponse.isNull())
+									report("Expected result root has no childes but responded result root has\n", fileStream);
+								else if (!childrenExpected.isNull() && childrenResponse.isNull())
+									report("Responded result root has no childes but expected result root has\n", fileStream);
+
+								//path, value
+								std::unordered_map<std::string, uint64_t> valuesExpected;
+								for (int index = 0; index < childrenExpected.size(); ++index)  // Iterates over the sequence elements.
+									valuesExpected.insert({ childrenExpected[index]["path"][0].asString() + (childrenExpected[index]["path"][1].isNull() ? "" : "," + childrenExpected[index]["path"][1].asString()), childrenExpected[index]["val"].asUInt64() });
+
+								std::unordered_map<std::string, uint64_t> valuesResponse;
+								for (int index = 0; index < childrenResponse.size(); ++index)  // Iterates over the sequence elements.
+									valuesResponse.insert({ childrenResponse[index]["path"][0].asString() + (childrenResponse[index]["path"][1].isNull() ? "" : "," + childrenResponse[index]["path"][1].asString()), childrenResponse[index]["val"].asUInt64() });
+
+								//{ "layers":["L0"], "root" : { "children":[{ "path":[102, 111], "val" : 7 }, { "path":[90,107], "val" : 55 }, { "path":[121,74], "val" : 12 }, { "path":[87,112], "val" : 1 }, { "path":[126,69], "val" : 4 }, { "path":[88,91], "val" : 18 }, { "path":[97,84], "val" : 7 }, { "path":[85,93], "val" : 3 }, { "path":[78,73], "val" : 4 }, { "path":[75,72], "val" : 8 }, { "path":[88,90], "val" : 6 }, { "path":[6,86], "val" : 8 }, { "path":[98,47], "val" : 60 }, { "path":[122,65], "val" : 11 }, { "path":[96,46], "val" : 2 }, { "path":[115,20], "val" : 41 }, { "path":[17,40], "val" : 45 }, { "path":[57,38], "val" : 1 }, { "path":[23,32], "val" : 8 }, { "path":[65,32], "val" : 40 }, { "path":[37,0], "val" : 31 }, { "path":[30,15], "val" : 7 }, { "path":[98,42], "val" : 46 }] } }
+
+								//compare
+								for (auto& a : valuesResponse)
+								{
+									auto foundChild = valuesExpected.find(a.first);
+									if (foundChild == valuesExpected.end())//not found
+									{
+										currentQuerySucceeded = false;
+										report("Unexpected path found: " + a.first + "\n\n", fileStream);
+									}
+									else//found
+									{
+										//compare value
+										if (foundChild->second != a.second)
+										{
+											currentQuerySucceeded = false;
+											report("Unexpected value " + std::to_string(a.second) + " instead of " + std::to_string(foundChild->second) + " for path " + a.first + " found\n\n", fileStream);
+										}
+									}
+								}
+
+								for (auto& a : valuesExpected)
+								{
+									auto foundChild = valuesResponse.find(a.first);
+									if (foundChild == valuesResponse.end())//not found
+									{
+										currentQuerySucceeded = false;
+										report("Path " + a.first + " is missing in response\n\n", fileStream);
+									}
+								}
+							}
+							else
+							{
+								//only root
+								if (rootResponse["root"]["val"].asUInt64() != rootExpected["root"]["val"].asUInt64())
+								{
+									currentQuerySucceeded = false;
+									report("Unexpected value " + std::to_string(rootResponse["root"]["val"].asUInt64()) + " instead of " + std::to_string(rootExpected["root"]["val"].asUInt64()) + " for root found\n\n", fileStream);
+								}
+							}
+						}
+						else
+						{
+							currentQuerySucceeded = false;
+							report("layers: " + rootResponse["layers"].asString() + " , expected: " + rootExpected["layers"].asString() + "\n\n", fileStream);
+						}
+
+						//{ "layers":[ "L0" ], "root":{ "children":[ { "path":[0], "val":100000 } ] } }
+						//{ "layers":[ "L0" ], "root":{ "children":[ { "path":[3], "val":129 }, { "path":[0], "val":83 }, { "path":[4], "val":4 }, { "path":[2], "val":6 } ] } }
+					}
+					else
+					{
+						currentQuerySucceeded = false;
+						report("Could not parse \"json\" : " + query.second + "\n\n", fileStream);
+					}
+				}
+			}
+			else//insert results from first run
+				query.second = ssResponse.str();
+
+			queriesSucceeded += currentQuerySucceeded;
 		}
 
-		report(std::to_string(querySucceeded) + "/" + std::to_string(queries.size()) + " queries succeeded\n", fileStream, true);
+		report(std::to_string(queriesSucceeded) + "/" + std::to_string(queries.size()) + " queries succeeded\n", fileStream);
 
 		return true;
 	}
 	catch (std::exception& e)
 	{
-		report("Exception: " + std::string(e.what()) + "\n", fileStream, true);
+		report("Exception: " + std::string(e.what()) + "\n", fileStream);
 		return false;
 	}
 }
@@ -424,7 +532,7 @@ int main(int argc, char *args[])
 	std::vector<std::string> params(args, args + argc);
 	Options options(params);
 
-	std::vector<std::string> queries = getQueries(options.queriesFilePath.getValue());
+	std::map<std::string, std::string> queries = getQueries(options.queriesFilePath.getValue());
 
 	auto numNanocubes = 1;
 
@@ -464,7 +572,7 @@ int main(int argc, char *args[])
 	{
 		logFileName = "testlog" + std::to_string(logfileNumber++) + ".txt";
 	} while (fileExists(logFileName));
-	
+
 	std::ofstream logFileStream(logFileName);
 
 	bool useAutoPartFunc = startsWith(options.nanocube_parts.getValue(), "auto");
@@ -476,6 +584,7 @@ int main(int argc, char *args[])
 		std::string arguments = " -d \"" + options.data.getValue() + "\"";
 		arguments += " -q " + std::to_string(options.query_port.getValue());
 		arguments += " -t " + std::to_string(options.no_mongoose_threads.getValue());
+
 		if (options.max_points.isSet())
 			arguments += " -m " + std::to_string(options.max_points.getValue());
 		arguments += " -f " + std::to_string(options.report_frequency.getValue());
@@ -507,8 +616,8 @@ int main(int argc, char *args[])
 
 		//TODO: Set Priority on Linux and Mac too
 #ifdef _WIN32
-		SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS); //REALTIME_PRIORITY_CLASS
-		SetPriorityClass(OpenProcess(PROCESS_ALL_ACCESS, TRUE, process1.get_id()), HIGH_PRIORITY_CLASS); //REALTIME_PRIORITY_CLASS
+		//SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS); //REALTIME_PRIORITY_CLASS
+		//SetPriorityClass(OpenProcess(PROCESS_ALL_ACCESS, TRUE, process1.get_id()), HIGH_PRIORITY_CLASS); //REALTIME_PRIORITY_CLASS
 #endif
 
 		while (!finishedInsert)

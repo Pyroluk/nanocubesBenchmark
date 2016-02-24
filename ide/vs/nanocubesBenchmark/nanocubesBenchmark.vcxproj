@@ -51,6 +51,9 @@
     <ClInclude Include="resource1.h" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\jsoncpp\jsoncpp.vcxproj">
+      <Project>{01d16c3a-787b-475a-8c07-f8a4797ef799}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\tiny-process-library\tiny-process-library.vcxproj">
       <Project>{142f40f5-5968-47bb-93c1-43b26b8d0b44}</Project>
     </ProjectReference>

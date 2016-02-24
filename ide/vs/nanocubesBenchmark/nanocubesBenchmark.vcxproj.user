@@ -1,11 +1,11 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <LocalDebuggerCommandArguments>-q 29511 -u "C:\Users\Lukas\Documents\Visual Studio 2015\Projects\nanocubesBenchmark\src\CrimeQueries.harp" -g 1 -p 4 -d "C:\Users\Lukas\Documents\Visual Studio 2015\Projects\allocator\data\crime50k.dmp" -n "C:\Users\Lukas\Documents\Visual Studio 2015\Projects\allocator\ide\VS\allocator\x64\Release\allocator.exe" -m 1000 -f 1</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>-m 100000 -q 29511 -u "C:\Users\Lukas\Documents\Visual Studio 2015\Projects\nanocubesBenchmark\data\PeterTestData.json" -g 1 -p auto4 -d "C:\Users\Lukas\Documents\Visual Studio 2015\Projects\allocator\data\NanoCubePeterTestData.dmp" -n "C:\Users\Lukas\Documents\Visual Studio 2015\Projects\allocator\ide\VS\allocator\x64\Release\allocator.exe" -f 1</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <LocalDebuggerCommandArguments>-u "C:\Users\Lukas\Documents\Visual Studio 2015\Projects\nanocubesBenchmark\src\PeterTestData.harp" -p 4 -d "C:\Users\Lukas\Documents\Visual Studio 2015\Projects\allocator\data\NanoCubePeterTestData.dmp" -n "C:\Users\Lukas\Documents\Visual Studio 2015\Projects\allocator\ide\VS\allocator\x64\Release\allocator.exe" -m 100000 -f 1 -g 1</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>-m 100000 -q 29511 -u "C:\Users\Lukas\Documents\Visual Studio 2015\Projects\nanocubesBenchmark\data\PeterTestData.json" -g 1 -p auto4 -d "C:\Users\Lukas\Documents\Visual Studio 2015\Projects\allocator\data\NanoCubePeterTestData.dmp" -n "C:\Users\Lukas\Documents\Visual Studio 2015\Projects\allocator\ide\VS\allocator\x64\Release\allocator.exe" -f 1</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
 </Project>

@@ -30,8 +30,9 @@ if(APPLE)
 endif(APPLE)
 
 if(UNIX)
-   set(CMAKE_CXX_FLAGS "-std=c++11" CACHE STRING "compile flags" FORCE)
+   set(CMAKE_CXX_FLAGS "-std=c++11 -O3" CACHE STRING "compile flags" FORCE)
 endif(UNIX)
 
-add_subdirectory (thirdparty/tiny-process-library)                
+add_subdirectory (thirdparty/tiny-process-library)
+add_subdirectory (thirdparty/jsoncpp)
 add_subdirectory (src)
