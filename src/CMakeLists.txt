@@ -3,4 +3,5 @@ target_link_libraries (nanocubesBenchmark
 LINK_PUBLIC
 tinyprocesslib
 jsoncpp
-${Boost_LIBRARIES})
+${Boost_LIBRARIES}
+${CMAKE_THREAD_LIBS_INIT})
