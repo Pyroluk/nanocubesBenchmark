@@ -175,7 +175,14 @@ struct Options {
 		"",                   // value
 		"File path" // type description
 	};
-
+	TCLAP::ValueArg<std::uint64_t> max_nanocube_size{
+		"g",                      // flag
+		"max_nanocube_size",              // name
+		"Defines the sizes of the temporary memory files, and therefore the maximum nanocube size in GB",  // description
+		false,                // required
+		32,                   // value
+		"size in GB" // type description
+	};
 #ifdef _WIN32
 	TCLAP::ValueArg<std::string> temp_path{
 		"w",                      // flag
@@ -184,14 +191,6 @@ struct Options {
 		false,                // required
 		"",                   // value
 		"dictionary path" // type description
-	};
-	TCLAP::ValueArg<std::uint64_t> max_nanocube_size{
-		"g",                      // flag
-		"max_nanocube_size",              // name
-		"Defines the sizes of the temporary memory files, and therefore the maximum nanocube size in GB",  // description
-		false,                // required
-		32,                   // value
-		"size in GB" // type description
 	};
 #endif // _WIN32
 };
@@ -215,9 +214,9 @@ Options::Options(std::vector<std::string>& args)
 	cmd_line.add(compression);
 	cmd_line.add(nanocubeFilePath);
 	cmd_line.add(queriesFilePath);
+	cmd_line.add(max_nanocube_size);
 #ifdef _WIN32
 	cmd_line.add(temp_path);
-	cmd_line.add(max_nanocube_size);
 #endif
 	cmd_line.parse(args);
 }
@@ -584,7 +583,6 @@ int main(int argc, char *args[])
 		std::string arguments = " -d \"" + options.data.getValue() + "\"";
 		arguments += " -q " + std::to_string(options.query_port.getValue());
 		arguments += " -t " + std::to_string(options.no_mongoose_threads.getValue());
-
 		if (options.max_points.isSet())
 			arguments += " -m " + std::to_string(options.max_points.getValue());
 		arguments += " -f " + std::to_string(options.report_frequency.getValue());
