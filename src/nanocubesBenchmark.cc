@@ -175,7 +175,7 @@ struct Options {
 		"",                   // value
 		"File path" // type description
 	};
-	TCLAP::ValueArg<std::uint64_t> max_nanocube_size{
+	TCLAP::ValueArg<int> max_nanocube_size{
 		"g",                      // flag
 		"max_nanocube_size",              // name
 		"Defines the sizes of the temporary memory files, and therefore the maximum nanocube size in GB",  // description
