@@ -5,6 +5,11 @@
 #include <unordered_map>
 #include <boost/asio.hpp>
 
+#ifndef _WIN32
+//#include <sys/time.h>
+#include <sys/resource.h>
+#endif
+
 #include "stopwatch.hh"
 #include "tclap/CmdLine.h"
 #include "tiny-process-library/process.hpp"
@@ -72,6 +77,15 @@ struct Options {
 		0,                                        // value
 		"insert-port"                             // type description
 	};*/
+
+	TCLAP::ValueArg<bool> verifyQueryResults{
+		"v",              // flag
+		"verify_query_results",        // name
+		"Compairs the query results of the first run against the following",     // description
+		false,                                 // required
+		false,                                   // value
+		"1 for yes"                         // type description
+	};
 
 	TCLAP::ValueArg<int> no_mongoose_threads{
 		"t",              // flag
@@ -215,6 +229,7 @@ Options::Options(std::vector<std::string>& args)
 	cmd_line.add(nanocubeFilePath);
 	cmd_line.add(queriesFilePath);
 	cmd_line.add(max_nanocube_size);
+	cmd_line.add(verifyQueryResults);
 #ifdef _WIN32
 	cmd_line.add(temp_path);
 #endif
@@ -357,8 +372,6 @@ bool runQuereys(Options& options, std::map<std::string, std::string>& queries, s
 			request_stream << "Accept: */*\r\n";
 			request_stream << "\r\n\r\n";
 
-			report(query.first + "\n", fileStream);
-
 			// Send the request.
 			boost::asio::write(socket, request);
 
@@ -406,105 +419,106 @@ bool runQuereys(Options& options, std::map<std::string, std::string>& queries, s
 				ssResponse << &response;
 
 			//optional: Check if response corresponds to the on located inside the harp/har file
-			if (query.second != "")
-			{
-				if (query.second != ssResponse.str())//direct compare
+			if (options.verifyQueryResults.isSet())
+				if (query.second != "")
 				{
-					//compare in detail, order of paths can vary
-
-					//parse JSON
-					Json::Value rootResponse;
-					ssResponse >> rootResponse;
-
-					Json::Value rootExpected;
-					Json::Reader reader;
-					bool parsingSuccessful = reader.parse(query.second, rootExpected);
-					if (parsingSuccessful)
+					if (query.second != ssResponse.str())//direct compare
 					{
-						//check if equal
-						if (rootResponse["layers"][0].asString() == rootExpected["layers"][0].asString())
+						//compare in detail, order of paths can vary
+
+						//parse JSON
+						Json::Value rootResponse;
+						ssResponse >> rootResponse;
+
+						Json::Value rootExpected;
+						Json::Reader reader;
+						bool parsingSuccessful = reader.parse(query.second, rootExpected);
+						if (parsingSuccessful)
 						{
-							//{ "layers":[], "root" : { "val":43402 } }
-
-							if (rootExpected["root"]["val"].isNull() || rootResponse["root"]["val"].isNull())//root has no value
+							//check if equal
+							if (rootResponse["layers"][0].asString() == rootExpected["layers"][0].asString())
 							{
-								const Json::Value childrenResponse = rootResponse["root"]["children"];
-								const Json::Value childrenExpected = rootExpected["root"]["children"];
+								//{ "layers":[], "root" : { "val":43402 } }
 
-								if (childrenExpected.isNull() && !childrenResponse.isNull())
-									report("Expected result root has no childes but responded result root has\n", fileStream);
-								else if (!childrenExpected.isNull() && childrenResponse.isNull())
-									report("Responded result root has no childes but expected result root has\n", fileStream);
-
-								//path, value
-								std::unordered_map<std::string, uint64_t> valuesExpected;
-								for (int index = 0; index < childrenExpected.size(); ++index)  // Iterates over the sequence elements.
-									valuesExpected.insert({ childrenExpected[index]["path"][0].asString() + (childrenExpected[index]["path"][1].isNull() ? "" : "," + childrenExpected[index]["path"][1].asString()), childrenExpected[index]["val"].asUInt64() });
-
-								std::unordered_map<std::string, uint64_t> valuesResponse;
-								for (int index = 0; index < childrenResponse.size(); ++index)  // Iterates over the sequence elements.
-									valuesResponse.insert({ childrenResponse[index]["path"][0].asString() + (childrenResponse[index]["path"][1].isNull() ? "" : "," + childrenResponse[index]["path"][1].asString()), childrenResponse[index]["val"].asUInt64() });
-
-								//{ "layers":["L0"], "root" : { "children":[{ "path":[102, 111], "val" : 7 }, { "path":[90,107], "val" : 55 }, { "path":[121,74], "val" : 12 }, { "path":[87,112], "val" : 1 }, { "path":[126,69], "val" : 4 }, { "path":[88,91], "val" : 18 }, { "path":[97,84], "val" : 7 }, { "path":[85,93], "val" : 3 }, { "path":[78,73], "val" : 4 }, { "path":[75,72], "val" : 8 }, { "path":[88,90], "val" : 6 }, { "path":[6,86], "val" : 8 }, { "path":[98,47], "val" : 60 }, { "path":[122,65], "val" : 11 }, { "path":[96,46], "val" : 2 }, { "path":[115,20], "val" : 41 }, { "path":[17,40], "val" : 45 }, { "path":[57,38], "val" : 1 }, { "path":[23,32], "val" : 8 }, { "path":[65,32], "val" : 40 }, { "path":[37,0], "val" : 31 }, { "path":[30,15], "val" : 7 }, { "path":[98,42], "val" : 46 }] } }
-
-								//compare
-								for (auto& a : valuesResponse)
+								if (rootExpected["root"]["val"].isNull() || rootResponse["root"]["val"].isNull())//root has no value
 								{
-									auto foundChild = valuesExpected.find(a.first);
-									if (foundChild == valuesExpected.end())//not found
+									const Json::Value childrenResponse = rootResponse["root"]["children"];
+									const Json::Value childrenExpected = rootExpected["root"]["children"];
+
+									if (childrenExpected.isNull() && !childrenResponse.isNull())
+										report(query.first + "\nExpected result root has no childes but responded result root has\n", fileStream);
+									else if (!childrenExpected.isNull() && childrenResponse.isNull())
+										report(query.first + "\nResponded result root has no childes but expected result root has\n", fileStream);
+
+									//path, value
+									std::unordered_map<std::string, uint64_t> valuesExpected;
+									for (int index = 0; index < childrenExpected.size(); ++index)  // Iterates over the sequence elements.
+										valuesExpected.insert({ childrenExpected[index]["path"][0].asString() + (childrenExpected[index]["path"][1].isNull() ? "" : "," + childrenExpected[index]["path"][1].asString()), childrenExpected[index]["val"].asUInt64() });
+
+									std::unordered_map<std::string, uint64_t> valuesResponse;
+									for (int index = 0; index < childrenResponse.size(); ++index)  // Iterates over the sequence elements.
+										valuesResponse.insert({ childrenResponse[index]["path"][0].asString() + (childrenResponse[index]["path"][1].isNull() ? "" : "," + childrenResponse[index]["path"][1].asString()), childrenResponse[index]["val"].asUInt64() });
+
+									//{ "layers":["L0"], "root" : { "children":[{ "path":[102, 111], "val" : 7 }, { "path":[90,107], "val" : 55 }, { "path":[121,74], "val" : 12 }, { "path":[87,112], "val" : 1 }, { "path":[126,69], "val" : 4 }, { "path":[88,91], "val" : 18 }, { "path":[97,84], "val" : 7 }, { "path":[85,93], "val" : 3 }, { "path":[78,73], "val" : 4 }, { "path":[75,72], "val" : 8 }, { "path":[88,90], "val" : 6 }, { "path":[6,86], "val" : 8 }, { "path":[98,47], "val" : 60 }, { "path":[122,65], "val" : 11 }, { "path":[96,46], "val" : 2 }, { "path":[115,20], "val" : 41 }, { "path":[17,40], "val" : 45 }, { "path":[57,38], "val" : 1 }, { "path":[23,32], "val" : 8 }, { "path":[65,32], "val" : 40 }, { "path":[37,0], "val" : 31 }, { "path":[30,15], "val" : 7 }, { "path":[98,42], "val" : 46 }] } }
+
+									//compare
+									for (auto& a : valuesResponse)
 									{
-										currentQuerySucceeded = false;
-										report("Unexpected path found: " + a.first + "\n\n", fileStream);
-									}
-									else//found
-									{
-										//compare value
-										if (foundChild->second != a.second)
+										auto foundChild = valuesExpected.find(a.first);
+										if (foundChild == valuesExpected.end())//not found
 										{
 											currentQuerySucceeded = false;
-											report("Unexpected value " + std::to_string(a.second) + " instead of " + std::to_string(foundChild->second) + " for path " + a.first + " found\n\n", fileStream);
+											report(query.first + "\nUnexpected path found: " + a.first + "\n\n", fileStream);
+										}
+										else//found
+										{
+											//compare value
+											if (foundChild->second != a.second)
+											{
+												currentQuerySucceeded = false;
+												report(query.first + "\nUnexpected value " + std::to_string(a.second) + " instead of " + std::to_string(foundChild->second) + " for path " + a.first + " found\n\n", fileStream);
+											}
+										}
+									}
+
+									for (auto& a : valuesExpected)
+									{
+										auto foundChild = valuesResponse.find(a.first);
+										if (foundChild == valuesResponse.end())//not found
+										{
+											currentQuerySucceeded = false;
+											report(query.first + "\nPath " + a.first + " is missing in response\n\n", fileStream);
 										}
 									}
 								}
-
-								for (auto& a : valuesExpected)
+								else
 								{
-									auto foundChild = valuesResponse.find(a.first);
-									if (foundChild == valuesResponse.end())//not found
+									//only root
+									if (rootResponse["root"]["val"].asUInt64() != rootExpected["root"]["val"].asUInt64())
 									{
 										currentQuerySucceeded = false;
-										report("Path " + a.first + " is missing in response\n\n", fileStream);
+										report(query.first + "\nUnexpected value " + std::to_string(rootResponse["root"]["val"].asUInt64()) + " instead of " + std::to_string(rootExpected["root"]["val"].asUInt64()) + " for root found\n\n", fileStream);
 									}
 								}
 							}
 							else
 							{
-								//only root
-								if (rootResponse["root"]["val"].asUInt64() != rootExpected["root"]["val"].asUInt64())
-								{
-									currentQuerySucceeded = false;
-									report("Unexpected value " + std::to_string(rootResponse["root"]["val"].asUInt64()) + " instead of " + std::to_string(rootExpected["root"]["val"].asUInt64()) + " for root found\n\n", fileStream);
-								}
+								currentQuerySucceeded = false;
+								report(query.first + "\nlayers: " + rootResponse["layers"].asString() + " , expected: " + rootExpected["layers"].asString() + "\n\n", fileStream);
 							}
+
+							//{ "layers":[ "L0" ], "root":{ "children":[ { "path":[0], "val":100000 } ] } }
+							//{ "layers":[ "L0" ], "root":{ "children":[ { "path":[3], "val":129 }, { "path":[0], "val":83 }, { "path":[4], "val":4 }, { "path":[2], "val":6 } ] } }
 						}
 						else
 						{
 							currentQuerySucceeded = false;
-							report("layers: " + rootResponse["layers"].asString() + " , expected: " + rootExpected["layers"].asString() + "\n\n", fileStream);
+							report(query.first + "\nCould not parse \"json\" : " + query.second + "\n\n", fileStream);
 						}
-
-						//{ "layers":[ "L0" ], "root":{ "children":[ { "path":[0], "val":100000 } ] } }
-						//{ "layers":[ "L0" ], "root":{ "children":[ { "path":[3], "val":129 }, { "path":[0], "val":83 }, { "path":[4], "val":4 }, { "path":[2], "val":6 } ] } }
-					}
-					else
-					{
-						currentQuerySucceeded = false;
-						report("Could not parse \"json\" : " + query.second + "\n\n", fileStream);
 					}
 				}
-			}
-			else//insert results from first run
-				query.second = ssResponse.str();
+				else//insert results from first run
+					query.second = ssResponse.str();
 
 			queriesSucceeded += currentQuerySucceeded;
 		}
@@ -616,8 +630,11 @@ int main(int argc, char *args[])
 
 		//TODO: Set Priority on Linux and Mac too
 #ifdef _WIN32
-		//SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS); //REALTIME_PRIORITY_CLASS
-		//SetPriorityClass(OpenProcess(PROCESS_ALL_ACCESS, TRUE, process1.get_id()), HIGH_PRIORITY_CLASS); //REALTIME_PRIORITY_CLASS
+		SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS); //REALTIME_PRIORITY_CLASS
+		SetPriorityClass(OpenProcess(PROCESS_ALL_ACCESS, TRUE, process1.get_id()), HIGH_PRIORITY_CLASS); //REALTIME_PRIORITY_CLASS
+#else
+		setpriority(PRIO_PROCESS, getpid(), -15);
+		setpriority(PRIO_PROCESS, process1.get_id(), -15);
 #endif
 
 		while (!finishedInsert)
