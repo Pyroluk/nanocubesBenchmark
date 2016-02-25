@@ -163,15 +163,6 @@ struct Options {
 		"name" // type description
 	};*/
 
-	TCLAP::ValueArg<std::string> compression{
-		"c",                      // flag
-		"compression",              // name
-		"Set or disables the compression algorithm for storing",  // description
-		false,                // required
-		"gzip",                   // value
-		"gzip, bzip2 or none" // type description
-	};
-
 	TCLAP::ValueArg<std::string> nanocubeFilePath{
 		"n",                      // flag
 		"nanocubeFilePath",              // name
@@ -225,7 +216,6 @@ Options::Options(std::vector<std::string>& args)
 	cmd_line.add(nanocube_parts);
 	cmd_line.add(training_size);
 	//cmd_line.add(alias);
-	cmd_line.add(compression);
 	cmd_line.add(nanocubeFilePath);
 	cmd_line.add(queriesFilePath);
 	cmd_line.add(max_nanocube_size);
@@ -602,7 +592,6 @@ int main(int argc, char *args[])
 		arguments += " -f " + std::to_string(options.report_frequency.getValue());
 		arguments += " -b " + std::to_string(options.batch_size.getValue());
 		arguments += " -x " + std::to_string(options.training_size.getValue());
-		arguments += " -c " + options.compression.getValue();
 #ifdef _WIN32
 		if (options.temp_path.isSet())
 			arguments += " -w " + options.temp_path.getValue();
