@@ -83,7 +83,7 @@ struct Options {
 		"verify_query_results",        // name
 		"Compairs the query results of the first run against the following",     // description
 		false,                                 // required
-		false,                                   // value
+		false,                                  // value
 		"1 for yes"                         // type description
 	};
 
@@ -188,9 +188,9 @@ struct Options {
 		32,                   // value
 		"size in GB" // type description
 	};
-	TCLAP::ValueArg<bool> highPriority{
-		"h",                      // flag
-		"highPriority",              // name
+	TCLAP::ValueArg<bool> high_priority{
+		"e",                      // flag
+		"high_priority",              // name
 		"Will set process priorities to HIGH_PRIORITY_CLASS on windows and respectively nice to -15 on linux/mac",  // description
 		false,                // required
 		false,                   // value
@@ -229,7 +229,7 @@ Options::Options(std::vector<std::string>& args)
 	cmd_line.add(max_nanocube_size);
 	cmd_line.add(showQueueStatus);
 	cmd_line.add(verifyQueryResults);
-	cmd_line.add(highPriority);
+	cmd_line.add(high_priority);
 #ifdef _WIN32
 	cmd_line.add(temp_path);
 #endif
@@ -629,7 +629,7 @@ int main(int argc, char *args[])
 			report(s, logFileStream, finishedInsert);
 		});
 
-		if (options.highPriority.isSet())
+		if (options.high_priority.isSet())
 		{
 #ifdef _WIN32
 			SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS); //REALTIME_PRIORITY_CLASS
