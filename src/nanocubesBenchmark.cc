@@ -154,14 +154,14 @@ struct Options {
 		"number" // type description
 	};
 
-	/*TCLAP::ValueArg<std::string> alias{
-		"a",                      // flag
-		"alias",              // name
-		"Try registering this server into the registries on NANOCUBE_REGISTRY env. variable",  // description
+	TCLAP::ValueArg<bool> showQueueStatus{
+		"z",                      // flag
+		"show_queue_status",              // name
+		"displays the fill level of the queues",  // description
 		false,                // required
-		"",                   // value
-		"name" // type description
-	};*/
+		false,                   // value
+		"1 for yes" // type description
+	};
 
 	TCLAP::ValueArg<std::string> nanocubeFilePath{
 		"n",                      // flag
@@ -187,6 +187,14 @@ struct Options {
 		false,                // required
 		32,                   // value
 		"size in GB" // type description
+	};
+	TCLAP::ValueArg<bool> highPriority{
+		"h",                      // flag
+		"highPriority",              // name
+		"Will set process priorities to HIGH_PRIORITY_CLASS on windows and respectively nice to -15 on linux/mac",  // description
+		false,                // required
+		false,                   // value
+		"yes if set" // type description
 	};
 #ifdef _WIN32
 	TCLAP::ValueArg<std::string> temp_path{
@@ -219,7 +227,9 @@ Options::Options(std::vector<std::string>& args)
 	cmd_line.add(nanocubeFilePath);
 	cmd_line.add(queriesFilePath);
 	cmd_line.add(max_nanocube_size);
+	cmd_line.add(showQueueStatus);
 	cmd_line.add(verifyQueryResults);
+	cmd_line.add(highPriority);
 #ifdef _WIN32
 	cmd_line.add(temp_path);
 #endif
@@ -592,6 +602,8 @@ int main(int argc, char *args[])
 		arguments += " -f " + std::to_string(options.report_frequency.getValue());
 		arguments += " -b " + std::to_string(options.batch_size.getValue());
 		arguments += " -x " + std::to_string(options.training_size.getValue());
+		if (options.showQueueStatus.isSet())
+			arguments += " -z " + std::to_string(options.showQueueStatus.getValue());
 #ifdef _WIN32
 		if (options.temp_path.isSet())
 			arguments += " -w " + options.temp_path.getValue();
@@ -617,14 +629,16 @@ int main(int argc, char *args[])
 			report(s, logFileStream, finishedInsert);
 		});
 
-		//TODO: Set Priority on Linux and Mac too
+		if (options.highPriority.isSet())
+		{
 #ifdef _WIN32
-		SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS); //REALTIME_PRIORITY_CLASS
-		SetPriorityClass(OpenProcess(PROCESS_ALL_ACCESS, TRUE, process1.get_id()), HIGH_PRIORITY_CLASS); //REALTIME_PRIORITY_CLASS
+			SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS); //REALTIME_PRIORITY_CLASS
+			SetPriorityClass(OpenProcess(PROCESS_ALL_ACCESS, TRUE, process1.get_id()), HIGH_PRIORITY_CLASS); //REALTIME_PRIORITY_CLASS
 #else
-		setpriority(PRIO_PROCESS, getpid(), -15);
-		setpriority(PRIO_PROCESS, process1.get_id(), -15);
+			setpriority(PRIO_PROCESS, getpid(), -15);
+			setpriority(PRIO_PROCESS, process1.get_id(), -15);
 #endif
+		}
 
 		while (!finishedInsert)
 			std::this_thread::sleep_for(std::chrono::seconds(1));
