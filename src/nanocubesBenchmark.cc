@@ -661,6 +661,8 @@ int main(int argc, char *args[])
 		sw2.stop();
 
 		process1.kill(true);
+
+		std::this_thread::sleep_for(std::chrono::seconds(2));
 	}
 
 	logFileStream.close();
